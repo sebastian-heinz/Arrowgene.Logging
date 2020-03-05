@@ -1,0 +1,16 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <RootNamespace>Arrowgene.Logging</RootNamespace>
+    <Title>Arrowgene.Logging</Title>
+    <Company>Arrowgene</Company>
+    <Copyright>Copyright © 2017-2020 Arrowgene</Copyright>
+    <Version>$(Version)</Version>
+    <Authors>sebastian-heinz</Authors>
+    <Description>Arrowgene.Logging provides logging capabilities</Description>
+    <PackageProjectUrl>https://github.com/sebastian-heinz/Arrowgene.Logging</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/sebastian-heinz/Arrowgene.Logging</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>log,logger,logging,arrowgene</PackageTags>
+  </PropertyGroup>
+</Project>
