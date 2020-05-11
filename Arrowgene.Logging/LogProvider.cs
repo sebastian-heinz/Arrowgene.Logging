@@ -12,8 +12,9 @@ namespace Arrowgene.Logging
         private static readonly Dictionary<string, object> Configurations;
         private static readonly object Lock;
 
-        private static CancellationTokenSource CancellationTokenSource;
-        private static Thread Thread;
+        private static CancellationTokenSource _cancellationTokenSource;
+        private static Thread _thread;
+        private static bool _running;
 
         static LogProvider()
         {
@@ -21,6 +22,7 @@ namespace Arrowgene.Logging
             Loggers = new Dictionary<string, ILogger>();
             Configurations = new Dictionary<string, object>();
             Lock = new object();
+            _running = false;
         }
 
         /// <summary>
@@ -30,16 +32,34 @@ namespace Arrowgene.Logging
 
         public static void Start()
         {
-            CancellationTokenSource = new CancellationTokenSource();
-            Thread = new Thread(WriteThread);
-            Thread.Name = "LogWriteThread";
-            Thread.Start();
+            lock (Lock)
+            {
+                if (_running)
+                {
+                    return;
+                }
+
+                _cancellationTokenSource = new CancellationTokenSource();
+                _thread = new Thread(WriteThread);
+                _thread.Name = "LogWriteThread";
+                _thread.Start();
+                _running = true;
+            }
         }
 
         public static void Stop()
         {
-            CancellationTokenSource.Cancel();
-            Thread.Join();
+            lock (Lock)
+            {
+                if (!_running)
+                {
+                    return;
+                }
+
+                _cancellationTokenSource.Cancel();
+                _thread.Join();
+                _running = false;
+            }
         }
 
         public static ILogger Logger(object instance)
@@ -101,7 +121,7 @@ namespace Arrowgene.Logging
 
         /// <summary>
         /// Provide a configuration object that will be passed to every <see cref="ILogger"/> instance
-        /// by calling <see cref="ILogger.Initialize(string,string,System.Action{Arrowgene.Logging.Log}(Arrowgene.Logging.Log),object)"/> on it.
+        /// by calling <see cref="ILogger.Initialize(string,string,System.Action{Arrowgene.Logging.Log},object)"/> on it.
         /// </summary>
         public static void Configure<T>(object configuration) where T : ILogger, new()
         {
@@ -115,7 +135,7 @@ namespace Arrowgene.Logging
 
         /// <summary>
         /// Provide a configuration object that will be passed to every <see cref="ILogger"/> instance
-        /// by calling <see cref="ILogger.Initialize(string,string,System.Action{Arrowgene.Logging.Log}(Arrowgene.Logging.Log),object)"/> on it.
+        /// by calling <see cref="ILogger.Initialize(string,string,System.Action{Arrowgene.Logging.Log},object)"/> on it.
         /// </summary>
         public static void Configure(string identity, object configuration)
         {
@@ -129,12 +149,12 @@ namespace Arrowgene.Logging
 
         private static void WriteThread()
         {
-            while (!CancellationTokenSource.Token.IsCancellationRequested)
+            while (!_cancellationTokenSource.Token.IsCancellationRequested)
             {
                 Log log;
                 try
                 {
-                    log = Events.Take(CancellationTokenSource.Token);
+                    log = Events.Take(_cancellationTokenSource.Token);
                 }
                 catch (OperationCanceledException)
                 {
