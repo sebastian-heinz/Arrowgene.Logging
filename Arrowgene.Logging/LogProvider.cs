@@ -1,143 +1,92 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Threading;
 
 namespace Arrowgene.Logging
 {
-    public sealed class LogProvider
+    public static class LogProvider
     {
-        private static readonly LogProvider _instance = new LogProvider();
+        private static readonly BlockingCollection<Log> Events;
+        private static readonly Dictionary<string, ILogger> Loggers;
+        private static readonly Dictionary<string, object> Configurations;
+        private static readonly object Lock;
+
+        private static CancellationTokenSource CancellationTokenSource;
+        private static Thread Thread;
 
         static LogProvider()
         {
-        }
-
-        public static LogProvider Instance => _instance;
-
-        public static ILogger Logger(object instance)
-        {
-            return Instance.GetLogger<Logger>(instance);
-        }
-
-        public static ILogger Logger(Type type)
-        {
-            return Instance.GetLogger<Logger>(type);
-        }
-
-        public static T Logger<T>(object instance) where T : ILogger, new()
-        {
-            return Instance.GetLogger<T>(instance);
-        }
-
-        public static T Logger<T>(Type type) where T : ILogger, new()
-        {
-            return Instance.GetLogger<T>(type);
-        }
-
-        public static T Logger<T>(string identity, string zone = null) where T : ILogger, new()
-        {
-            return Instance.GetLogger<T>(identity, zone);
-        }
-
-        public static void Configure<T>(object configuration) where T : ILogger, new()
-        {
-            Instance.SetConfigure(typeof(T), configuration);
-        }
-
-        public static void Configure(Type type, object configuration)
-        {
-            Instance.SetConfigure(type.FullName, configuration);
-        }
-
-        /// <summary>
-        /// Provide a configuration object that will be passed to every <see cref="ILogger"/> instance
-        /// by calling <see cref="ILogger.Initialize(string, string, object)"/> on it.
-        /// </summary>
-        public static void Configure(string identity, object configuration)
-        {
-            Instance.SetConfigure(identity, configuration);
-        }
-
-        private readonly Dictionary<string, ILogger> _loggers;
-        private readonly Dictionary<string, object> _configurations;
-        private readonly object _lock;
-
-        private LogProvider()
-        {
-            _loggers = new Dictionary<string, ILogger>();
-            _configurations = new Dictionary<string, object>();
-            _lock = new object();
+            Events = new BlockingCollection<Log>();
+            Loggers = new Dictionary<string, ILogger>();
+            Configurations = new Dictionary<string, object>();
+            Lock = new object();
         }
 
         /// <summary>
         /// Notifies about any logging event from every ILogger instance
         /// </summary>
-        public static event EventHandler<LogWriteEventArgs> GlobalLogWrite;
+        public static event EventHandler<LogWriteEventArgs> OnLogWrite;
 
-        public void SetConfigure<T>(object configuration) where T : ILogger, new()
+        public static void Start()
         {
-            SetConfigure(typeof(T), configuration);
+            CancellationTokenSource = new CancellationTokenSource();
+            Thread = new Thread(WriteThread);
+            Thread.Name = "LogWriteThread";
+            Thread.Start();
         }
 
-        public void SetConfigure(Type type, object configuration)
+        public static void Stop()
         {
-            SetConfigure(type.FullName, configuration);
+            CancellationTokenSource.Cancel();
+            Thread.Join();
         }
 
-        /// <summary>
-        /// Provide a configuration object that will be passed to every <see cref="ILogger"/> instance
-        /// by calling <see cref="ILogger.Initialize(string, string, object)"/> on it.
-        /// </summary>
-        public void SetConfigure(string identity, object configuration)
+        public static ILogger Logger(object instance)
         {
-            _configurations.Add(identity, configuration);
+            return Logger<Logger>(instance);
         }
 
-        public ILogger GetLogger(object instance)
+        public static ILogger Logger(Type type)
         {
-            return GetLogger<Logger>(instance);
+            return Logger<Logger>(type);
         }
 
-        public ILogger GetLogger(Type type)
+        public static T Logger<T>(object instance) where T : ILogger, new()
         {
-            return GetLogger<Logger>(type);
+            return Logger<T>(instance.GetType());
         }
 
-        public T GetLogger<T>(object instance) where T : ILogger, new()
+        public static T Logger<T>(Type type) where T : ILogger, new()
         {
-            return GetLogger<T>(instance.GetType());
-        }
-
-        public T GetLogger<T>(Type type) where T : ILogger, new()
-        {
-            return GetLogger<T>(type.FullName, type.Name);
+            return Logger<T>(type.FullName, type.Name);
         }
 
         /// <summary>
         /// Returns a logger that matches the identity or creates a new one.
         /// </summary>
         /// <param name="identity">Unique token to identify a logger</param>
-        /// <param name="name">Name to identify the log origin</param>
+        /// <param name="name"></param>
         /// <typeparam name="T">Type of the logger instance</typeparam>
         /// <returns>New instance of T or existing ILogger if the identity already exists</returns>
         /// <exception cref="T:System.Exception"><paramref name="identity">identity</paramref> does not match T.</exception>
-        public T GetLogger<T>(string identity, string name = null) where T : ILogger, new()
+        public static T Logger<T>(string identity, string name = null) where T : ILogger, new()
         {
             ILogger logger;
-            lock (_lock)
+            lock (Lock)
             {
-                if (!_loggers.TryGetValue(identity, out logger))
+                if (!Loggers.TryGetValue(identity, out logger))
                 {
                     object configuration = null;
                     string typeName = typeof(T).FullName;
-                    if (typeName != null && _configurations.ContainsKey(typeName))
+                    if (typeName != null && Configurations.ContainsKey(typeName))
                     {
-                        configuration = _configurations[typeName];
+                        configuration = Configurations[typeName];
                     }
 
                     logger = new T();
-                    logger.Initialize(identity, name, configuration);
-                    logger.LogWrite += LoggerOnLogWrite;
-                    _loggers.Add(identity, logger);
+                    logger.Initialize(identity, name, Write, configuration);
+                    Loggers.Add(identity, logger);
                 }
             }
 
@@ -150,12 +99,54 @@ namespace Arrowgene.Logging
             throw new Exception($"Logger identity: {identity} is not type of {typeof(T)} but {realType}");
         }
 
-        private void LoggerOnLogWrite(object sender, LogWriteEventArgs writeEventArgs)
+        /// <summary>
+        /// Provide a configuration object that will be passed to every <see cref="ILogger"/> instance
+        /// by calling <see cref="ILogger.Initialize(string,string,System.Action{Arrowgene.Logging.Log}(Arrowgene.Logging.Log),object)"/> on it.
+        /// </summary>
+        public static void Configure<T>(object configuration) where T : ILogger, new()
         {
-            EventHandler<LogWriteEventArgs> globalLogWrite = GlobalLogWrite;
-            if (globalLogWrite != null)
+            Configure(typeof(T), configuration);
+        }
+
+        public static void Configure(Type type, object configuration)
+        {
+            Configure(type.FullName, configuration);
+        }
+
+        /// <summary>
+        /// Provide a configuration object that will be passed to every <see cref="ILogger"/> instance
+        /// by calling <see cref="ILogger.Initialize(string,string,System.Action{Arrowgene.Logging.Log}(Arrowgene.Logging.Log),object)"/> on it.
+        /// </summary>
+        public static void Configure(string identity, object configuration)
+        {
+            Configurations.Add(identity, configuration);
+        }
+
+        public static void Write(Log log)
+        {
+            Events.Add(log);
+        }
+
+        private static void WriteThread()
+        {
+            while (!CancellationTokenSource.Token.IsCancellationRequested)
             {
-                globalLogWrite(sender, writeEventArgs);
+                Log log;
+                try
+                {
+                    log = Events.Take(CancellationTokenSource.Token);
+                }
+                catch (OperationCanceledException)
+                {
+                    return;
+                }
+
+                EventHandler<LogWriteEventArgs> onLogWrite = OnLogWrite;
+                if (onLogWrite != null)
+                {
+                    LogWriteEventArgs logWriteEventArgs = new LogWriteEventArgs(log);
+                    onLogWrite(null, logWriteEventArgs);
+                }
             }
         }
     }

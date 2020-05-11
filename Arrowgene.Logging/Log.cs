@@ -8,7 +8,7 @@ namespace Arrowgene.Logging
         {
             Text = text;
             LogLevel = logLevel;
-            DateTime = DateTime.Now;
+            DateTime = DateTime.UtcNow;
             LoggerIdentity = loggerIdentity;
             LoggerName = loggerName ?? "";
             Tag = tag;

@@ -4,29 +4,25 @@ namespace Arrowgene.Logging
 {
     public class Logger : ILogger
     {
-        private string _zone;
+        private string _name;
         private string _identity;
+        private Action<Log> _write;
 
-        public Logger()
-        {
-        }
-
-        public event EventHandler<LogWriteEventArgs> LogWrite;
-
-        public virtual void Initialize(string identity, string zone, object configuration)
+        public virtual void Initialize(string identity, string name, Action<Log> write, object configuration)
         {
             _identity = identity;
-            _zone = zone;
+            _name = name;
+            _write = write;
         }
 
         public void Write(Log log)
         {
-            OnLogWrite(log);
+            _write(log);
         }
 
         public void Write(LogLevel logLevel, string message, object tag)
         {
-            Log log = new Log(logLevel, message, tag, _identity, _zone);
+            Log log = new Log(logLevel, message, tag, _identity, _name);
             Write(log);
         }
 
@@ -59,16 +55,6 @@ namespace Arrowgene.Logging
             }
 
             Write(LogLevel.Error, exception.ToString(), exception);
-        }
-
-        private void OnLogWrite(Log log)
-        {
-            EventHandler<LogWriteEventArgs> logWrite = LogWrite;
-            if (logWrite != null)
-            {
-                LogWriteEventArgs logWriteEventArgs = new LogWriteEventArgs(log);
-                logWrite(this, logWriteEventArgs);
-            }
         }
     }
 }
