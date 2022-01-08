@@ -139,6 +139,11 @@ namespace Arrowgene.Logging
         /// </summary>
         public static void Configure(string identity, object configuration)
         {
+            if (Configurations.ContainsKey(identity))
+            {
+                return;
+            }
+
             Configurations.Add(identity, configuration);
         }
 
