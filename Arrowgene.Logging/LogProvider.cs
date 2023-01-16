@@ -9,18 +9,20 @@ namespace Arrowgene.Logging
     {
         private static readonly BlockingCollection<Log> Events;
         private static readonly Dictionary<string, ILogger> Loggers;
-        private static readonly Dictionary<string, object> Configurations;
+        private static readonly Dictionary<string, object> LoggerTypeConfigurations;
+        private static readonly Dictionary<string, object> NamespaceConfigurations;
         private static readonly object Lock;
 
         private static CancellationTokenSource _cancellationTokenSource;
         private static Thread _thread;
         private static bool _running;
-
+        
         static LogProvider()
         {
             Events = new BlockingCollection<Log>();
             Loggers = new Dictionary<string, ILogger>();
-            Configurations = new Dictionary<string, object>();
+            LoggerTypeConfigurations = new Dictionary<string, object>();
+            NamespaceConfigurations = new Dictionary<string, object>();
             Lock = new object();
             _running = false;
         }
@@ -97,15 +99,32 @@ namespace Arrowgene.Logging
             {
                 if (!Loggers.TryGetValue(identity, out logger))
                 {
-                    object configuration = null;
-                    string typeName = typeof(T).FullName;
-                    if (typeName != null && Configurations.ContainsKey(typeName))
+                    object loggerTypeTag = null;
+                    string loggerTypeName = typeof(T).FullName;
+                    if (loggerTypeName != null && LoggerTypeConfigurations.ContainsKey(loggerTypeName))
                     {
-                        configuration = Configurations[typeName];
+                        loggerTypeTag = LoggerTypeConfigurations[loggerTypeName];
                     }
 
+                    object identityTag = null;
+                    string searchNs = identity;
+                    while (true)
+                    {
+                        if (NamespaceConfigurations.ContainsKey(searchNs))
+                        {
+                            identityTag = NamespaceConfigurations[searchNs];
+                            break;
+                        }
+                        int lastIdx = searchNs.LastIndexOf('.');
+                        if (lastIdx == -1)
+                        {
+                            break;
+                        }
+                        searchNs = searchNs.Substring(0, lastIdx);
+                    }
+                    
                     logger = new T();
-                    logger.Initialize(identity, name, Write, configuration);
+                    logger.Initialize(identity, name, Write, loggerTypeTag, identityTag);
                     Loggers.Add(identity, logger);
                 }
             }
@@ -121,7 +140,22 @@ namespace Arrowgene.Logging
 
         /// <summary>
         /// Provide a configuration object that will be passed to every <see cref="ILogger"/> instance
-        /// by calling <see cref="ILogger.Initialize(string,string,System.Action{Arrowgene.Logging.Log},object)"/> on it.
+        /// that is created and inside the provided namespace
+        /// by calling <see cref="ILogger.Initialize(string,string,System.Action{Arrowgene.Logging.Log},object,object)"/> on it.
+        /// </summary>
+        public static void ConfigureNamespace(string ns, object configuration)
+        {
+            if (NamespaceConfigurations.ContainsKey(ns))
+            {
+                return;
+            }
+
+            NamespaceConfigurations.Add(ns, configuration);
+        }
+
+        /// <summary>
+        /// Provide a configuration object that will be passed to every <see cref="ILogger"/> instance
+        /// by calling <see cref="ILogger.Initialize(string,string,System.Action{Arrowgene.Logging.Log},object,object)"/> on it.
         /// </summary>
         public static void Configure<T>(object configuration) where T : ILogger, new()
         {
@@ -135,16 +169,16 @@ namespace Arrowgene.Logging
 
         /// <summary>
         /// Provide a configuration object that will be passed to every <see cref="ILogger"/> instance
-        /// by calling <see cref="ILogger.Initialize(string,string,System.Action{Arrowgene.Logging.Log},object)"/> on it.
+        /// by calling <see cref="ILogger.Initialize(string,string,System.Action{Arrowgene.Logging.Log},object, object)"/> on it.
         /// </summary>
         public static void Configure(string identity, object configuration)
         {
-            if (Configurations.ContainsKey(identity))
+            if (LoggerTypeConfigurations.ContainsKey(identity))
             {
                 return;
             }
 
-            Configurations.Add(identity, configuration);
+            LoggerTypeConfigurations.Add(identity, configuration);
         }
 
         public static void Write(Log log)
