@@ -99,20 +99,20 @@ namespace Arrowgene.Logging
             {
                 if (!Loggers.TryGetValue(identity, out logger))
                 {
-                    object loggerTypeTag = null;
+                    object loggerTypeConfig = null;
                     string loggerTypeName = typeof(T).FullName;
                     if (loggerTypeName != null && LoggerTypeConfigurations.ContainsKey(loggerTypeName))
                     {
-                        loggerTypeTag = LoggerTypeConfigurations[loggerTypeName];
+                        loggerTypeConfig = LoggerTypeConfigurations[loggerTypeName];
                     }
 
-                    object identityTag = null;
+                    object identityConfig = null;
                     string searchNs = identity;
                     while (true)
                     {
                         if (NamespaceConfigurations.ContainsKey(searchNs))
                         {
-                            identityTag = NamespaceConfigurations[searchNs];
+                            identityConfig = NamespaceConfigurations[searchNs];
                             break;
                         }
                         int lastIdx = searchNs.LastIndexOf('.');
@@ -124,7 +124,8 @@ namespace Arrowgene.Logging
                     }
                     
                     logger = new T();
-                    logger.Initialize(identity, name, Write, loggerTypeTag, identityTag);
+                    logger.Initialize(identity, name, Write);
+                    logger.Configure(loggerTypeConfig, identityConfig);
                     Loggers.Add(identity, logger);
                 }
             }
@@ -141,7 +142,7 @@ namespace Arrowgene.Logging
         /// <summary>
         /// Provide a configuration object that will be passed to every <see cref="ILogger"/> instance
         /// that is created and inside the provided namespace
-        /// by calling <see cref="ILogger.Initialize(string,string,System.Action{Arrowgene.Logging.Log},object,object)"/> on it.
+        /// by calling <see cref="ILogger.Initialize(string,string,System.Action{Arrowgene.Logging.Log})"/> on it.
         /// </summary>
         public static void ConfigureNamespace(string ns, object configuration)
         {
@@ -155,7 +156,7 @@ namespace Arrowgene.Logging
 
         /// <summary>
         /// Provide a configuration object that will be passed to every <see cref="ILogger"/> instance
-        /// by calling <see cref="ILogger.Initialize(string,string,System.Action{Arrowgene.Logging.Log},object,object)"/> on it.
+        /// by calling <see cref="ILogger.Initialize(string,string,System.Action{Arrowgene.Logging.Log})"/> on it.
         /// </summary>
         public static void Configure<T>(object configuration) where T : ILogger, new()
         {
@@ -169,7 +170,7 @@ namespace Arrowgene.Logging
 
         /// <summary>
         /// Provide a configuration object that will be passed to every <see cref="ILogger"/> instance
-        /// by calling <see cref="ILogger.Initialize(string,string,System.Action{Arrowgene.Logging.Log},object, object)"/> on it.
+        /// by calling <see cref="ILogger.Initialize(string,string,System.Action{Arrowgene.Logging.Log})"/> on it.
         /// </summary>
         public static void Configure(string identity, object configuration)
         {

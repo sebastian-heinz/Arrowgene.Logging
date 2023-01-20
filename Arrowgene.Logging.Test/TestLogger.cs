@@ -4,8 +4,14 @@ namespace Arrowgene.Logging.Test;
 
 public class TestLogger : ILogger
 {
-    public virtual void Initialize(string identity, string name, Action<Log> write, object loggerTypeTag, object identityTag)
+    public void Initialize(string identity, string name, Action<Log> write)
     {
+     
+    }
+
+    public virtual void Configure(object loggerTypeConfig, object identityConfig)
+    {
+     
     }
 
     public virtual void Write(LogLevel logLevel, string message, object tag)

@@ -7,10 +7,9 @@ public class LogProviderTest
 {
     private class TestNsLogger : TestLogger
     {
-        public override void Initialize(string identity, string name, Action<Log> write, object loggerTypeTag,
-            object identityTag)
+        public override void Configure(object loggerTypeConfig, object identityConfig)
         {
-            Assert.Equal("Arrowgene.Logging.Test", identityTag);
+            Assert.Equal("Arrowgene.Logging.Test", identityConfig);
         }
     }
 

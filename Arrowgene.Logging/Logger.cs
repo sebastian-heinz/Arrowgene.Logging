@@ -10,14 +10,20 @@ namespace Arrowgene.Logging
 
         public virtual void Initialize(string identity,
             string name,
-            Action<Log> write,
-            object loggerTypeTag,
-            object identityTag
+            Action<Log> write
         )
         {
             _identity = identity;
             _name = name;
             _write = write;
+        }
+        
+        public virtual void Configure(
+            object loggerTypeConfig,
+            object identityConfig
+        )
+        {
+
         }
 
         public void Write(Log log)
